@@ -28,7 +28,7 @@ project(
   ueberzugpp
   LANGUAGES CXX C
   VERSION ${UEBERZUGPP_VERSION})
-add_executable(ueberzug)
+add_library(ueberzug-lib)
 
 option(ENABLE_X11 "Enable X11 canvas." ON)
 option(ENABLE_XCB_ERRORS "Enable useful logging of XCB errors." OFF)
@@ -51,7 +51,7 @@ set(CMAKE_REQUIRED_LIBRARIES TBB::tbb)
 check_cxx_symbol_exists(std::execution::par_unseq execution
                         HAVE_STD_EXECUTION_H)
 if(HAVE_STD_EXECUTION_H)
-  target_compile_definitions(ueberzug PRIVATE HAVE_STD_EXECUTION_H)
+  target_compile_definitions(ueberzug-lib PUBLIC HAVE_STD_EXECUTION_H)
 endif()
 
 find_package(CLI11 QUIET)
@@ -105,14 +105,14 @@ if(NOT range-v3_FOUND)
 endif()
 
 if(ENABLE_OPENGL)
-  target_compile_definitions(ueberzug PRIVATE ENABLE_OPENGL)
+  target_compile_definitions(ueberzug-lib PUBLIC ENABLE_OPENGL)
   find_package(OpenGL REQUIRED)
   list(APPEND UEBERZUG_SOURCES "src/util/egl.cpp")
   list(APPEND UEBERZUG_LIBRARIES OpenGL::OpenGL OpenGL::EGL)
 endif()
 
 if(ENABLE_X11)
-  target_compile_definitions(ueberzug PRIVATE ENABLE_X11)
+  target_compile_definitions(ueberzug-lib PUBLIC ENABLE_X11)
   pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb)
   pkg_check_modules(XCBIMAGE REQUIRED IMPORTED_TARGET xcb-image)
   pkg_check_modules(XCBRES REQUIRED IMPORTED_TARGET xcb-res)
@@ -126,14 +126,14 @@ if(ENABLE_X11)
   endif()
 
   if(ENABLE_XCB_ERRORS)
-    target_compile_definitions(ueberzug PRIVATE ENABLE_XCB_ERRORS)
+    target_compile_definitions(ueberzug-lib PUBLIC ENABLE_XCB_ERRORS)
     pkg_check_modules(XCBERRORS REQUIRED IMPORTED_TARGET xcb-errors)
     list(APPEND UEBERZUG_LIBRARIES PkgConfig::XCBERRORS)
   endif()
 endif()
 
 if(ENABLE_WAYLAND)
-  target_compile_definitions(ueberzug PRIVATE ENABLE_WAYLAND)
+  target_compile_definitions(ueberzug-lib PUBLIC ENABLE_WAYLAND)
   find_package(ECM REQUIRED NO_MODULE)
   list(APPEND CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
@@ -169,7 +169,7 @@ if(ENABLE_WAYLAND)
 endif()
 
 if(ENABLE_OPENCV)
-  target_compile_definitions(ueberzug PRIVATE ENABLE_OPENCV)
+  target_compile_definitions(ueberzug-lib PUBLIC ENABLE_OPENCV)
   find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs videoio)
 
   list(APPEND UEBERZUG_SOURCES "src/image/opencv.cpp")
@@ -178,7 +178,7 @@ if(ENABLE_OPENCV)
 endif()
 
 if(ENABLE_TURBOBASE64)
-  target_compile_definitions(ueberzug PRIVATE ENABLE_TURBOBASE64)
+  target_compile_definitions(ueberzug-lib PUBLIC ENABLE_TURBOBASE64)
   find_package(turbobase64 QUIET)
   if(NOT turbobase64_FOUND)
     FetchContent_Declare(
@@ -190,7 +190,7 @@ if(ENABLE_TURBOBASE64)
                      EXCLUDE_FROM_ALL)
     list(APPEND UEBERZUG_LIBRARIES base64)
   else()
-    target_compile_definitions(ueberzug PRIVATE WITH_SYSTEM_TURBOBASE64)
+    target_compile_definitions(ueberzug-lib PUBLIC WITH_SYSTEM_TURBOBASE64)
     list(APPEND UEBERZUG_LIBRARIES turbo::base64)
   endif()
 endif()
@@ -198,10 +198,10 @@ endif()
 set(PROJECT_WARNINGS_CXX -Wall -Wextra -Wpedantic -Werror)
 
 target_compile_options(
-  ueberzug PRIVATE $<$<CONFIG:Debug>:
-                   $<$<COMPILE_LANGUAGE:CXX>:${PROJECT_WARNINGS_CXX}> >)
+  ueberzug-lib PRIVATE $<$<CONFIG:Debug>:
+                       $<$<COMPILE_LANGUAGE:CXX>:${PROJECT_WARNINGS_CXX}> >)
 
-target_compile_definitions(ueberzug PRIVATE $<$<CONFIG:Debug>: DEBUG >)
+target_compile_definitions(ueberzug-lib PRIVATE $<$<CONFIG:Debug>: DEBUG >)
 
 pkg_check_modules(VIPS REQUIRED IMPORTED_TARGET vips-cpp)
 pkg_check_modules(SIXEL REQUIRED IMPORTED_TARGET libsixel)
@@ -209,7 +209,7 @@ pkg_check_modules(CHAFA REQUIRED IMPORTED_TARGET chafa>=1.6)
 pkg_check_modules(EXIF REQUIRED IMPORTED_TARGET libexif)
 
 if(CMAKE_HOST_SYSTEM_VERSION MATCHES "^.*microsoft.*$")
-  target_compile_definitions(ueberzug PRIVATE WSL)
+  target_compile_definitions(ueberzug-lib PUBLIC WSL)
 endif()
 
 if(APPLE)
@@ -224,7 +224,6 @@ configure_file("docs/ueberzugpp.1.in" ueberzugpp.1)
 list(
   APPEND
   UEBERZUG_SOURCES
-  "src/main.cpp"
   "src/application.cpp"
   "src/os.cpp"
   "src/tmux.cpp"
@@ -259,10 +258,18 @@ list(
   PkgConfig::CHAFA
   PkgConfig::EXIF)
 
-target_include_directories(ueberzug PRIVATE "${CMAKE_SOURCE_DIR}/include"
-                                            "${PROJECT_BINARY_DIR}")
-target_sources(ueberzug PRIVATE ${UEBERZUG_SOURCES})
-target_link_libraries(ueberzug PRIVATE ${UEBERZUG_LIBRARIES})
+target_include_directories(ueberzug-lib PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include"
+                                               "${PROJECT_BINARY_DIR}")
+target_sources(ueberzug-lib PUBLIC ${UEBERZUG_SOURCES})
+target_link_libraries(ueberzug-lib PUBLIC ${UEBERZUG_LIBRARIES})
+
+add_executable(ueberzug)
+target_sources(ueberzug PRIVATE "src/main.cpp")
+target_link_libraries(ueberzug PUBLIC ueberzug-lib)
+target_compile_options(
+  ueberzug PRIVATE $<$<CONFIG:Debug>:
+                   $<$<COMPILE_LANGUAGE:CXX>:${PROJECT_WARNINGS_CXX}> >)
+
 file(CREATE_LINK ueberzug "${PROJECT_BINARY_DIR}/ueberzugpp" SYMBOLIC)
 
 install(TARGETS ueberzug RUNTIME)
